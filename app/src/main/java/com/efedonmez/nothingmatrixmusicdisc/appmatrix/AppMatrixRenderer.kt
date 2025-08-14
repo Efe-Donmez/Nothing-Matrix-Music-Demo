@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.efedonmez.nothingmatrixmusicdisc.toy.GlyphDeviceResolver
+import com.efedonmez.nothingmatrixmusicdisc.toy.GlyphPreviewStore
 import com.nothing.ketchum.Glyph
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixManager
@@ -17,6 +19,8 @@ object AppMatrixRenderer {
     @Volatile private var isInitialized: Boolean = false
     @Volatile private var pendingText: String? = null
     @Volatile private var isAnimating: Boolean = false
+    @Volatile private var gridW: Int = 25
+    @Volatile private var gridH: Int = 25
     private var lastText: String = ""
     private var lastWidth: Int = 40
     private var scrollX: Int = 25
@@ -38,13 +42,16 @@ object AppMatrixRenderer {
     }
 
     private fun ensureInit(context: Context) {
-        if (manager != null) return
+        if (manager != null && isInitialized) return
         val m = GlyphMatrixManager.getInstance(context.applicationContext)
         manager = m
         m.init(object : GlyphMatrixManager.Callback {
             override fun onServiceConnected(name: ComponentName) {
-                // Register device; adjust if needed
-                m.register(Glyph.DEVICE_23111)
+                // Cihazı çöz ve grid ölçülerini ayarla
+                val cfg = GlyphDeviceResolver.resolve(context)
+                try { m.register(cfg.deviceCode) } catch (_: Throwable) {}
+                gridW = cfg.gridWidth
+                gridH = cfg.gridHeight
                 isInitialized = true
                 pendingText?.let { text ->
                     pendingText = null
@@ -88,6 +95,12 @@ object AppMatrixRenderer {
             val frame = GlyphMatrixFrame.Builder()
                 .addTop(obj)
                 .build(context)
+
+            // Preview'u güncelle (frame'den piksel üret)
+            try {
+                val pixels = frame.render()
+                GlyphPreviewStore.update(gridW, gridH, pixels)
+            } catch (_: Throwable) {}
 
             m.setAppMatrixFrame(frame)
 

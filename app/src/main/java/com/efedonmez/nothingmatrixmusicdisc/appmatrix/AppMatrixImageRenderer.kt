@@ -34,7 +34,7 @@ object AppMatrixImageRenderer {
             val contrast = com.efedonmez.nothingmatrixmusicdisc.settings.AppSettings.getMatrixContrast(context)
             val pixels = convertBitmapToGlyph(bitmap, w, h, brightness, contrast)
             
-            // 📸 Önizlemeyi güncelle
+            // 📸 Önizlemeyi güncelle (defensive copy zaten store içinde var)
             GlyphPreviewStore.update(w, h, pixels)
             
             try {

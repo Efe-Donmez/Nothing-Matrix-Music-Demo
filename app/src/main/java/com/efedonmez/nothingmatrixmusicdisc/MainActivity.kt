@@ -42,6 +42,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NothingMatrixMusicDiscTheme {
+                // 🔔 Uygulama açıldığında tüm izinleri kontrol et
+                LaunchedEffect(Unit) {
+                    com.efedonmez.nothingmatrixmusicdisc.util.PermissionHelper.checkAllPermissions(this@MainActivity)
+                }
+                
                 Scaffold(
                     topBar = {
                         TopAppBar(
@@ -106,11 +111,11 @@ class MainActivity : ComponentActivity() {
                                     onClick = {
                                         val currentlyRunning = AppSettings.isMatrixRunning(this@MainActivity)
                                         if (currentlyRunning) {
-                                            // Kesin kapatma: Service'i devre dışı bırak ve kapat
+                                            // Kesin kapatma: Linear Matrix Controller ile
                                             AppSettings.setServiceDisabled(this@MainActivity, true)
                                             AppSettings.setMatrixRunning(this@MainActivity, false)
                                             startService(Intent(this@MainActivity, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_STOP))
-                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixControl.close(this@MainActivity)
+                                            com.efedonmez.nothingmatrixmusicdisc.matrix.MatrixController.close(this@MainActivity)
                                             isRunning.value = false
                                         } else {
                                             // Başlatma: Service'i aktif et ve başlat
@@ -324,10 +329,14 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     FilledTonalButton(
                                         onClick = {
-                                            // GÖRSEL moduna geç: önce her şeyi temizle, sonra yeniden başlat
-                                            switchToVisualMode()
+                                            // GÖRSEL moduna geç: Linear Matrix Controller ile
                                             glyphShowArt.value = true
                                             glyphShowTitle.value = false
+                                            AppSettings.setGlyphShowArt(this@MainActivity, true)
+                                            AppSettings.setGlyphShowTitle(this@MainActivity, false)
+                                            
+                                            // Anında güncelle (AppMatrix yolundan)
+                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity)
                                         },
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.filledTonalButtonColors(
@@ -346,10 +355,17 @@ class MainActivity : ComponentActivity() {
                                     
                                     FilledTonalButton(
                                         onClick = {
-                                            // METİN moduna geç: önce her şeyi temizle, sonra yeniden başlat
-                                            switchToTextMode()
+                                            // METİN moduna geç: Linear Matrix Controller ile
                                             glyphShowTitle.value = true
                                             glyphShowArt.value = false
+                                            AppSettings.setGlyphShowTitle(this@MainActivity, true)
+                                            AppSettings.setGlyphShowArt(this@MainActivity, false)
+                                            
+                                            // Anında güncelle (AppMatrix yolundan)
+                                            val text = NowPlayingStore.getText()
+                                            if (!text.isNullOrBlank()) {
+                                                com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixRenderer.renderText(this@MainActivity, text)
+                                            }
                                         },
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.filledTonalButtonColors(
@@ -379,7 +395,10 @@ class MainActivity : ComponentActivity() {
                                             val v = (it * 255).toInt().coerceIn(0, 255)
                                             brightState.value = v
                                             AppSettings.setMatrixBrightness(this@MainActivity, v)
-                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity)
+                                            // Anında güncelle (sadece görsel modda - AppMatrix)
+                                            if (glyphShowArt.value) {
+                                                com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity)
+                                            }
                                         },
                                         colors = SliderDefaults.colors(
                                             thumbColor = Color.White,
@@ -397,7 +416,10 @@ class MainActivity : ComponentActivity() {
                                             val v = (it * 200).toInt().coerceIn(0, 200)
                                             contrastState.value = v
                                             AppSettings.setMatrixContrast(this@MainActivity, v)
-                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity)
+                                            // Anında güncelle (sadece görsel modda - AppMatrix)
+                                            if (glyphShowArt.value) {
+                                                com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity)
+                                            }
                                         },
                                         colors = SliderDefaults.colors(
                                             thumbColor = Color.White,
@@ -409,14 +431,42 @@ class MainActivity : ComponentActivity() {
                                 
                                 Spacer(modifier = Modifier.height(20.dp))
                                 
-                                // Otomatik kapanma süresi ayarı
-                                Text("Otomatik Kapanma: 10 saniye", color = Color.Gray, fontSize = 14.sp)
-                                Text(
-                                    text = "Müzik değiştiğinde Matrix 10 saniye gösterilir, sonra otomatik kapanır",
-                                    color = Color.Gray,
-                                    fontSize = 12.sp,
-                                    lineHeight = 16.sp
-                                )
+                                // İzin durumu ve ayarları
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        val notificationAccess = remember { mutableStateOf(com.efedonmez.nothingmatrixmusicdisc.nowplaying.NotificationAccess.isEnabled(this@MainActivity)) }
+                                        val batteryOptimization = remember { mutableStateOf(com.efedonmez.nothingmatrixmusicdisc.util.PermissionHelper.isBatteryOptimizationDisabled(this@MainActivity)) }
+                                        
+                                        Text("İzinler", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                        Text(
+                                            text = "🔔 Bildirim: ${if (notificationAccess.value) "✅" else "❌"}",
+                                            color = if (notificationAccess.value) Color(0xFF00FF00) else Color.Red,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = "🔋 Pil: ${if (batteryOptimization.value) "✅" else "❌"}",
+                                            color = if (batteryOptimization.value) Color(0xFF00FF00) else Color.Red,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    
+                                    FilledTonalButton(
+                                        onClick = {
+                                            com.efedonmez.nothingmatrixmusicdisc.util.PermissionHelper.checkAllPermissions(this@MainActivity)
+                                        }
+                                    ) {
+                                        Text("İZİNLER", fontSize = 12.sp)
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                // Otomatik kapanma bilgisi
+                                Text("Otomatik Kapanma: Resim 10sn, Yazı 5sn", color = Color.Gray, fontSize = 12.sp)
                             }
                         }
                     }
@@ -488,8 +538,8 @@ class MainActivity : ComponentActivity() {
         // Glyph Toy servisini durdur
         startService(Intent(this, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_STOP))
         
-        // App Matrix'i temizle ve kapat
-        com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixControl.close(this)
+        // Linear Matrix Controller ile temizle
+        com.efedonmez.nothingmatrixmusicdisc.matrix.MatrixController.close(this)
         
         // Durum ayarlarını kapat olarak işaretle
         AppSettings.setMatrixRunning(this, false)

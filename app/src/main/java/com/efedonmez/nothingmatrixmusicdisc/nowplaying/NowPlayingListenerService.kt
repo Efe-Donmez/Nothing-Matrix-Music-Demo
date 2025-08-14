@@ -35,6 +35,9 @@ class NowPlayingListenerService : NotificationListenerService() {
 		sbn ?: return                    // Bildirim yoksa çık
 		val n = sbn.notification ?: return // Notification objesi yoksa çık
 		
+		// 🔔 İzin kontrolü - İzin yoksa çık
+		if (!NotificationAccess.isEnabled(this)) return
+		
 		// 📊 Bildirimden müzik verilerini çıkar
         val extras = n.extras
 		val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString()       // Şarkı adı
@@ -88,24 +91,17 @@ class NowPlayingListenerService : NotificationListenerService() {
         val ctx = applicationContext
         if (!com.efedonmez.nothingmatrixmusicdisc.settings.AppSettings.isMatrixRunning(ctx)) return
         
-        try {
-            // 🎨 Kullanıcı tercihine göre Matrix'i güncelle (görsel ya da metin)
-            val showArt = com.efedonmez.nothingmatrixmusicdisc.settings.AppSettings.isGlyphShowArt(ctx)
-            if (showArt) {
-                // Görsel mod: albüm kapağını göster
-                com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(ctx)
-            } else {
-                // Metin mod: şarkı bilgisini göster
-                NowPlayingStore.getText()?.takeIf { it.isNotBlank() }?.let { 
-                    com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixRenderer.renderText(ctx, it) 
-                }
+        // 🎨 Daha önce çalışan yol: AppMatrix kanalları
+        val showArt = com.efedonmez.nothingmatrixmusicdisc.settings.AppSettings.isGlyphShowArt(ctx)
+        if (showArt) {
+            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(ctx)
+        } else {
+            val text = NowPlayingStore.getText()
+            if (!text.isNullOrBlank()) {
+                com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixRenderer.renderText(ctx, text)
             }
-            
-            // ⏰ closeAfter çağrısı AppMatrixImageRenderer/AppMatrixRenderer içinde yapılıyor
-            lastRenderMs = nowTs
-        } catch (_: Throwable) {
-            // Hata durumunda sessizce devam et
         }
+        lastRenderMs = nowTs
 	}
 }
 
