@@ -17,15 +17,22 @@ object AppMatrixImageRenderer {
     @Volatile private var isInitialized: Boolean = false
     @Volatile private var gridW: Int = 25
     @Volatile private var gridH: Int = 25
+    private var pendingBlack: Runnable? = null
+    private var pendingClose: Runnable? = null
+    private var pendingVerify: Runnable? = null
 
     fun renderNowPlayingArt(context: Context) {
+        // Yeni işleme başlamadan önce tüm planlı kapanmaları iptal et
+        AppMatrixControl.cancelScheduled()
         val art = NowPlayingStore.getInfo()?.art ?: return
         renderBitmap(context, art)
     }
 
     fun renderBitmap(context: Context, bitmap: Bitmap) {
-        // 🛑 Önceki işlemleri iptal et
-        handler.removeCallbacksAndMessages(null)
+        // 🛑 Önceki siyah/kapama/doğrulama zamanlayıcılarını iptal et
+        pendingBlack?.let { handler.removeCallbacks(it) }
+        pendingClose?.let { handler.removeCallbacks(it) }
+        pendingVerify?.let { handler.removeCallbacks(it) }
         
         ensureInit(context) {
             val w = gridW
@@ -38,11 +45,25 @@ object AppMatrixImageRenderer {
             GlyphPreviewStore.update(w, h, pixels)
             
             try {
-                // 📺 Matrix'te göster
-                manager?.setAppMatrixFrame(pixels)
+                // 📺 Matrix'te göster (tek sefer)
+                val m = manager ?: return@ensureInit
+                m.setAppMatrixFrame(pixels)
                 
-                // ⏰ 10 saniye sonra otomatik kapat
-                AppMatrixControl.closeAfter(context, 10_000)
+                // ⏰ 10 saniye sonra otomatik kapat (önceki zamanlayıcıları iptal ederek)
+                // 10.0 sn: siyah ve 10.25 sn: kapat (basit kapanış)
+                val snapshotW = w
+                val snapshotH = h
+                val snapshotM = m
+                val black = Runnable {
+                    AppMatrixControl.clearWith(snapshotM, snapshotW, snapshotH)
+                    com.efedonmez.nothingmatrixmusicdisc.toy.GlyphPreviewStore.clearNow()
+                }
+                pendingBlack = black
+                handler.postDelayed(black, 10_000)
+
+                val r = Runnable { AppMatrixControl.closeWith(snapshotM, snapshotW, snapshotH) }
+                pendingClose = r
+                handler.postDelayed(r, 10_250)
             } catch (e: Throwable) {
                 com.efedonmez.nothingmatrixmusicdisc.util.UiNotifier.show(context, "Matrix render hatası: ${e.message}")
             }

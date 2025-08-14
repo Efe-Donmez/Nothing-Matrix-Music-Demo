@@ -269,12 +269,17 @@ class MainActivity : ComponentActivity() {
                                 Box(
                                     modifier = Modifier
                                         .size(120.dp)
+                                        .clip(CircleShape)
                                         .background(Color.Black, CircleShape)
                                         .align(Alignment.CenterHorizontally)
                                 ) {
                                     val pf = previewState.value
                                     if (pf != null) {
-                                        androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+                                        androidx.compose.foundation.Canvas(
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .clip(CircleShape)
+                                        ) {
                                             val width = pf.width
                                             val height = pf.height
                                             val pixels = pf.pixels
@@ -330,6 +335,8 @@ class MainActivity : ComponentActivity() {
                                     FilledTonalButton(
                                         onClick = {
                                             // GÖRSEL moduna geç: Linear Matrix Controller ile
+                                            // Metin animasyonu varsa durdur
+                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixRenderer.stop()
                                             glyphShowArt.value = true
                                             glyphShowTitle.value = false
                                             AppSettings.setGlyphShowArt(this@MainActivity, true)
@@ -356,6 +363,8 @@ class MainActivity : ComponentActivity() {
                                     FilledTonalButton(
                                         onClick = {
                                             // METİN moduna geç: Linear Matrix Controller ile
+                                            // Görsel kapanma zamanlayıcısını sıfırla
+                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity) // yeni state'e göre yeniden hesaplanacak
                                             glyphShowTitle.value = true
                                             glyphShowArt.value = false
                                             AppSettings.setGlyphShowTitle(this@MainActivity, true)

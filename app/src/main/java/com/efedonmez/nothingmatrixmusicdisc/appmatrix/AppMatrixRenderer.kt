@@ -32,6 +32,9 @@ object AppMatrixRenderer {
     fun renderText(context: Context, text: String) {
         val safeText = text.takeIf { it.isNotBlank() } ?: return
         val sanitized = TextSanitizer.sanitizeForGlyph(safeText)
+        // Yeni işleme başlamadan önce planlı kapanmaları iptal et ve eski animasyonu durdur
+        AppMatrixControl.cancelScheduled()
+        stop()
         if (isInitialized && manager != null) {
             startOrUpdateMarquee(context, sanitized)
             return
@@ -39,6 +42,12 @@ object AppMatrixRenderer {
         // Not initialized yet: store and init
         pendingText = sanitized
         ensureInit(context)
+    }
+
+    /** Dışarıdan animasyonu kesin durdurur ve tüm callback'leri temizler. */
+    fun stop() {
+        isAnimating = false
+        handler.removeCallbacksAndMessages(null)
     }
 
     private fun ensureInit(context: Context) {
@@ -82,7 +91,11 @@ object AppMatrixRenderer {
 
     private fun animateRunnable(context: Context): Runnable = object : Runnable {
         override fun run() {
-            if (!isAnimating) return
+            if (!isAnimating) {
+                // Animasyon iptal edilmişse preview'u da temizle
+                try { com.efedonmez.nothingmatrixmusicdisc.toy.GlyphPreviewStore.clearNow() } catch (_: Throwable) {}
+                return
+            }
             val m = manager ?: return
 
             val obj = GlyphMatrixObject.Builder()
@@ -102,6 +115,7 @@ object AppMatrixRenderer {
                 GlyphPreviewStore.update(gridW, gridH, pixels)
             } catch (_: Throwable) {}
 
+            // Matrix'e yaz (tek frame)
             m.setAppMatrixFrame(frame)
 
             scrollX -= 1
@@ -114,6 +128,7 @@ object AppMatrixRenderer {
                     isAnimating = false
                     handler.removeCallbacksAndMessages(null)
                     AppMatrixControl.closeAfter(context, 100) // Hemen kapat
+                    try { com.efedonmez.nothingmatrixmusicdisc.toy.GlyphPreviewStore.scheduleFullClear(150) } catch (_: Throwable) {}
                     return
                 } else {
                     // Yeni tura başla

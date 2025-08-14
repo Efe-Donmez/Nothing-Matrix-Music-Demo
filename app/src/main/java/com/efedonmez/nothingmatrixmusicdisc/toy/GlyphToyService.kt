@@ -350,9 +350,7 @@ class GlyphToyService : Service() {
             )
         } catch (e: Throwable) { UiNotifier.show(this, "convertToGlyphMatrix hata: ${e.message}"); null } ?: return
         if (!previewOnly) {
-            try {
-                glyphManager?.setGlyphMatrixTimeout(false)
-            } catch (e: Throwable) { UiNotifier.show(this, "setGlyphMatrixTimeout hata: ${e.message}") }
+            // always_on davranışını istemiyorsan timeout açık (true) bırak
             try { glyphManager?.setMatrixFrame(pixels) } catch (e: Throwable) { UiNotifier.show(this, "setMatrixFrame hata: ${e.message}") }
         }
         // Preview'a gönder

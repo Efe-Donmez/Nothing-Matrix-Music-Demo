@@ -83,9 +83,8 @@ class NowPlayingListenerService : NotificationListenerService() {
         // 🎯 Sadece müzik değiştiyse ve otomatik gösterim açıksa Matrix'i güncelle
         if (!musicChanged) return  // Müzik değişmediyse hiçbir şey yapma
         
-        // ⏰ 10 saniye içinde tekrar güncellemeyi engelle (kapanmayı bozmasın)
+        // Her değişimde hemen güncelle (throttle kaldırıldı)
         val nowTs = System.currentTimeMillis()
-        if (nowTs - lastRenderMs < RENDER_WINDOW_MS) return
         
         // 🔧 Sadece servis çalışıyorsa otomatik gösterim yap
         val ctx = applicationContext
@@ -93,6 +92,11 @@ class NowPlayingListenerService : NotificationListenerService() {
         
         // 🎨 Daha önce çalışan yol: AppMatrix kanalları
         val showArt = com.efedonmez.nothingmatrixmusicdisc.settings.AppSettings.isGlyphShowArt(ctx)
+        // Yeni bildirim anında: eski işi tamamen iptal et (tek iş kuralı)
+        com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixControl.cancelScheduled()
+        com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixRenderer.stop()
+        // Kısa bir siyah frame ile anlık reset (donanım güç yönetimi toparlar)
+        try { com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixControl.clear(ctx) } catch (_: Throwable) {}
         if (showArt) {
             com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(ctx)
         } else {

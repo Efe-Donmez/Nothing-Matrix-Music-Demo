@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import com.efedonmez.nothingmatrixmusicdisc.toy.GlyphDeviceResolver
+import com.efedonmez.nothingmatrixmusicdisc.toy.GlyphPreviewStore
 import com.nothing.ketchum.GlyphMatrixManager
 
 object AppMatrixControl {
@@ -27,6 +28,8 @@ object AppMatrixControl {
                 try { mgr.register(cfg.deviceCode) } catch (_: Throwable) {}
                 gridW = cfg.gridWidth
                 gridH = cfg.gridHeight
+                // Firmware otomatik zaman aşımını aktif et (matrix kendisi kapatsın)
+                try { mgr.setGlyphMatrixTimeout(true) } catch (_: Throwable) {}
                 isInitialized = true
                 after()
             }
@@ -34,46 +37,77 @@ object AppMatrixControl {
         })
     }
 
+    /** Dışarıya: manager'ı yeniden başlat (kayıt + grid boyutu) */
+    fun reInit(context: Context) {
+        ensureInit(context) { }
+    }
+
     fun close(context: Context) {
-        ensureInit(context) {
-            // Clear first (bazı sürümlerde close no-op olabilir)
-            val zeros = IntArray(gridW * gridH) { 0 }
-            try { manager?.setAppMatrixFrame(zeros) } catch (_: Throwable) {}
-            try { manager?.closeAppMatrix() } catch (_: Throwable) {}
-        }
+        // Zamanlanmış close sırasında yeniden init bekleme; mevcut manager ile kapat
+        val m = manager ?: return
+        val zeros = IntArray(gridW * gridH) { 0 }
+        try { m.setAppMatrixFrame(zeros) } catch (_: Throwable) {}
+        try { GlyphPreviewStore.update(gridW, gridH, zeros) } catch (_: Throwable) {}
+        try { m.closeAppMatrix() } catch (_: Throwable) {}
+        try { GlyphPreviewStore.update(0, 0, intArrayOf()) } catch (_: Throwable) {}
+        // manager'ı resetlemiyoruz; bir sonraki iş daha hızlı başlasın
     }
 
     fun clear(context: Context) {
-        ensureInit(context) {
-            val zeros = IntArray(gridW * gridH) { 0 }
-            try { manager?.setAppMatrixFrame(zeros) } catch (_: Throwable) {}
-        }
+        val m = manager ?: return
+        val zeros = IntArray(gridW * gridH) { 0 }
+        try { m.setAppMatrixFrame(zeros) } catch (_: Throwable) {}
+        try { GlyphPreviewStore.update(gridW, gridH, zeros) } catch (_: Throwable) {}
+    }
+
+    /** Zamanlayıcıda manager null riskini önlemek için, render anındaki manager ile temizle */
+    fun clearWith(m: GlyphMatrixManager, width: Int, height: Int) {
+        val zeros = IntArray(width * height) { 0 }
+        try { m.setAppMatrixFrame(zeros) } catch (_: Throwable) {}
+        try { GlyphPreviewStore.update(width, height, zeros) } catch (_: Throwable) {}
     }
 
     fun closeAfter(context: Context, delayMs: Long) {
         // 🛑 Önceki kapanma işlemlerini iptal et
         pendingClear?.let { handler.removeCallbacks(it) }
         pendingClose?.let { handler.removeCallbacks(it) }
-        
         if (delayMs <= 100) {
-            // ⚡ Hemen kapat (100ms veya daha az)
             clear(context)
-            handler.postDelayed({ close(context) }, 100)
-        } else {
-            // ⏰ Zamanlı kapanma
-            // Step 1: Siyah ekran göster
-            val clearR = Runnable { 
-                clear(context)
-                // Step 2: 500ms sonra tamamen kapat
-                handler.postDelayed({ close(context) }, 500)
-            }
-            pendingClear = clearR
-            handler.postDelayed(clearR, delayMs)
+            val r = Runnable { close(context) }
+            pendingClose = r
+            handler.postDelayed(r, 100)
+            return
         }
-        
-        // Referansları temizle
+        val clearR = Runnable { clear(context) }
+        pendingClear = clearR
+        handler.postDelayed(clearR, delayMs)
+        val closeR = Runnable { close(context) }
+        pendingClose = closeR
+        handler.postDelayed(closeR, delayMs + 250)
+    }
+
+    /** Zamanlayıcıda manager null riskini önlemek için, render anındaki manager ile kapat */
+    fun closeWith(m: GlyphMatrixManager, width: Int, height: Int) {
+        val zeros = IntArray(width * height) { 0 }
+        try { m.setAppMatrixFrame(zeros) } catch (_: Throwable) {}
+        try { GlyphPreviewStore.update(width, height, zeros) } catch (_: Throwable) {}
+        try { m.closeAppMatrix() } catch (_: Throwable) {}
+        try { GlyphPreviewStore.update(0, 0, intArrayOf()) } catch (_: Throwable) {}
+    }
+
+    /** Dışarıdan zamanlanmış clear/close işlemlerini iptal eder. */
+    fun cancelScheduled() {
+        pendingClear?.let { handler.removeCallbacks(it) }
+        pendingClose?.let { handler.removeCallbacks(it) }
+        pendingClear = null
         pendingClose = null
     }
+
+    /**
+     * Force reset: Stuck durumlar için birkaç defa siyah frame basıp kapatır,
+     * ardından manager'ı sıfırlar (bir dahaki kullanımda yeniden init olur).
+     */
+    // forceReset kaldırıldı
 }
 
 
