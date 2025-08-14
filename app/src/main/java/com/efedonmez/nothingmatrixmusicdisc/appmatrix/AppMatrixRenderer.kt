@@ -59,16 +59,18 @@ object AppMatrixRenderer {
 
     private fun startOrUpdateMarquee(context: Context, text: String) {
         val t = text.ifBlank { return }
-        if (t != lastText) {
-            lastText = t
-            lastWidth = estimateTextWidthCells(lastText)
-            scrollX = 25 + entryPadding
-            loopCount = 0
-        }
-        if (!isAnimating) {
-            isAnimating = true
-            handler.post(animateRunnable(context))
-        }
+        
+        // 🛑 Önceki animasyonu tamamen durdur
+        isAnimating = false
+        handler.removeCallbacksAndMessages(null)
+        
+        // 🔄 Yeni animasyonu başlat  
+        lastText = t
+        lastWidth = estimateTextWidthCells(lastText)
+        scrollX = 25 + entryPadding
+        loopCount = 0
+        isAnimating = true
+        handler.post(animateRunnable(context))
     }
 
     private fun animateRunnable(context: Context): Runnable = object : Runnable {
@@ -95,10 +97,10 @@ object AppMatrixRenderer {
                 // Bir tur tamamlandı
                 loopCount += 1
                 if (loopCount >= 2) {
-                    // İki tur tamamlandı: kapat
+                    // İki tur tamamlandı: temizle ve kapat
                     isAnimating = false
                     handler.removeCallbacksAndMessages(null)
-                    try { m.closeAppMatrix() } catch (_: Throwable) {}
+                    AppMatrixControl.closeAfter(context, 100) // Hemen kapat
                     return
                 } else {
                     // Yeni tura başla

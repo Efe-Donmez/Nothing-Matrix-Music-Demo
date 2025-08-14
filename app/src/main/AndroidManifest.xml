@@ -59,27 +59,7 @@
                 android:value="true" />
         </service>
 
-        <service
-            android:name=".qs.QsTileWifiPanelService"
-            android:label="Wi‑Fi"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name=".qs.QsTileBluetoothSettingsService"
-            android:label="Bluetooth"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
+        
 
         <service
             android:name=".nowplaying.NowPlayingListenerService"

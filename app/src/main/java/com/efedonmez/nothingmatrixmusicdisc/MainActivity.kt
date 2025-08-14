@@ -1,47 +1,39 @@
 package com.efedonmez.nothingmatrixmusicdisc
 
+import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.Checkbox
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.Divider
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.tooling.preview.Preview
-import com.efedonmez.nothingmatrixmusicdisc.nowplaying.NotificationAccess
-import com.efedonmez.nothingmatrixmusicdisc.settings.AppSettings
-import com.efedonmez.nothingmatrixmusicdisc.ui.theme.NothingMatrixMusicDiscTheme
-import android.content.Intent
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.ui.res.stringResource
-import com.efedonmez.nothingmatrixmusicdisc.toy.GlyphToyService
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import com.efedonmez.nothingmatrixmusicdisc.nowplaying.NowPlayingStore
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
+import com.efedonmez.nothingmatrixmusicdisc.nowplaying.NowPlayingStore
+import com.efedonmez.nothingmatrixmusicdisc.settings.AppSettings
+import com.efedonmez.nothingmatrixmusicdisc.toy.GlyphToyService
+import com.efedonmez.nothingmatrixmusicdisc.ui.theme.NothingMatrixMusicDiscTheme
+import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.min
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -50,110 +42,458 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NothingMatrixMusicDiscTheme {
-                val hasAccess = remember { mutableStateOf(NotificationAccess.isEnabled(this)) }
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text(text = stringResource(id = R.string.app_name)) },
-                            actions = {
-                                TextButton(onClick = {
-                                    val i = Intent(this@MainActivity, GlyphToyService::class.java)
-                                        .setAction(GlyphToyService.ACTION_START)
-                                    startService(i)
-                                }) { Text("Başlat") }
-                                TextButton(onClick = {
-                                    val i = Intent(this@MainActivity, GlyphToyService::class.java)
-                                        .setAction(GlyphToyService.ACTION_STOP)
-                                    startService(i)
-                                }) { Text("Kapat") }
-                            }
+                            title = {
+                        Text(
+                                    text = "Nothing Glyph Matrix",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Light
+                                )
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Black,
+                                titleContentColor = Color.White
+                            )
                         )
                     },
-                    modifier = Modifier.fillMaxSize()
-                ) { innerPadding ->
-                    Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                        val infoState = remember { mutableStateOf(com.efedonmez.nothingmatrixmusicdisc.nowplaying.NowPlayingStore.getInfo()) }
+                    containerColor = Color.Black
+                ) { paddingValues ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(paddingValues)
+                            .padding(horizontal = 24.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        val infoState = remember { mutableStateOf(NowPlayingStore.getInfo()) }
+                        val glyphShowArt = remember { mutableStateOf(AppSettings.isGlyphShowArt(this@MainActivity)) }
+                        val glyphShowTitle = remember { mutableStateOf(AppSettings.isGlyphShowTitle(this@MainActivity)) }
+                        
+                        // Initialize mutually exclusive state
                         LaunchedEffect(Unit) {
-                            // Basit polling (ileride Flow/Livedata yapılabilir)
-                            while (true) {
-                                infoState.value = NowPlayingStore.getInfo()
-                                kotlinx.coroutines.delay(500)
+                            if (glyphShowArt.value == glyphShowTitle.value) {
+                                glyphShowArt.value = true
+                                glyphShowTitle.value = false
+                                AppSettings.setGlyphShowArt(this@MainActivity, true)
+                                AppSettings.setGlyphShowTitle(this@MainActivity, false)
                             }
                         }
-
-                        ElevatedCard(modifier = Modifier.padding(12.dp)) {
-                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                val art = infoState.value?.art
-                                if (art != null) {
-                                    Image(bitmap = art.asImageBitmap(), contentDescription = null, modifier = Modifier.size(96.dp))
-                                } else {
-                                    Spacer(modifier = Modifier.size(96.dp))
-                                }
-                                Column(modifier = Modifier.padding(start = 12.dp)) {
-                                    Text(text = infoState.value?.title ?: "Bilinmeyen Parça", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(text = infoState.value?.artist ?: "Bilinmeyen Sanatçı", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(text = if (infoState.value?.isPlaying == true) "Çalıyor" else "Duraklatıldı")
-                                }
-                            }
-                            // İlerleme bilgisi varsa çubuk göster (şimdilik bilinmiyorsa gizli)
-                            val pos = infoState.value?.positionMs
-                            val dur = infoState.value?.durationMs
-                            if (pos != null && dur != null && dur > 0) {
-                                val progress = (pos.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
-                                LinearProgressIndicator(progress = progress, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
-                                Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                                    Text(formatMs(pos))
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    Text(formatMs(dur))
+                        
+                        // Observe music changes
+                        LaunchedEffect(Unit) {
+                            lifecycleScope.launchWhenStarted {
+                                NowPlayingStore.infoFlow().collectLatest { info ->
+                                    infoState.value = info
                                 }
                             }
                         }
 
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                        // Hızlı kontroller (Glyph)
-                        Row(modifier = Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedButton(onClick = {
-                                val i = Intent(this@MainActivity, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_START)
-                                startService(i)
-                            }) { Text("Başlat") }
-                            Spacer(modifier = Modifier.size(8.dp))
-                            OutlinedButton(onClick = {
-                                val i = Intent(this@MainActivity, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_STOP)
-                                startService(i)
-                            }) { Text("Kapat") }
-                            Spacer(modifier = Modifier.weight(1f))
+                        // Control Section
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFF1A1A1A)
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                val isRunning = remember { mutableStateOf(AppSettings.isMatrixRunning(this@MainActivity)) }
+                                
+                                FilledTonalButton(
+                                    onClick = {
+                                        val currentlyRunning = AppSettings.isMatrixRunning(this@MainActivity)
+                                        if (currentlyRunning) {
+                                            // Kesin kapatma: Service'i devre dışı bırak ve kapat
+                                            AppSettings.setServiceDisabled(this@MainActivity, true)
+                                            AppSettings.setMatrixRunning(this@MainActivity, false)
+                                            startService(Intent(this@MainActivity, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_STOP))
+                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixControl.close(this@MainActivity)
+                                            isRunning.value = false
+                                        } else {
+                                            // Başlatma: Service'i aktif et ve başlat
+                                            AppSettings.setServiceDisabled(this@MainActivity, false)
+                                            AppSettings.setMatrixRunning(this@MainActivity, true)
+                                            val action = if (glyphShowArt.value) GlyphToyService.ACTION_SHOW_DISC else GlyphToyService.ACTION_START
+                                            startService(Intent(this@MainActivity, GlyphToyService::class.java).setAction(action))
+                                            isRunning.value = true
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = if (isRunning.value) "KAPAT" else "BAŞLAT",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                Text(
+                                    text = if (isRunning.value) "● Glyph Matrix Aktif" else "○ Glyph Matrix Kapalı",
+                                    color = if (isRunning.value) Color(0xFF00FF00) else Color.Gray,
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
 
-                        Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                        // Bildirim erişimi durumu ve ayarı
-                        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = if (hasAccess.value) "Bildirim erişimi açık" else "Bildirim erişimi kapalı")
-                            Spacer(modifier = Modifier.weight(1f))
-                            Button(onClick = { NotificationAccess.openSettings(this@MainActivity) }) { Text("Aç/Kapat") }
-                        }
-
-                        // App-mode ayarı
-                        val appMode = remember { mutableStateOf(AppSettings.isAppModeEnabled(this@MainActivity)) }
-                        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = appMode.value, onCheckedChange = {
-                                appMode.value = it
-                                AppSettings.setAppModeEnabled(this@MainActivity, it)
-                            })
-                            Text("Müzik değişiminde Matrix göster (app-mode)")
-                        }
-                    }
-                }
-                SideEffect {
-                    if (!hasAccess.value) {
-                        NotificationAccess.openSettings(this@MainActivity)
-                    } else {
-                        NotificationAccess.requestRebindIfPossible(this@MainActivity)
+                        // Now Playing Section
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFF1A1A1A)
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text(
+                                    text = "ŞU AN ÇALIYOR",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val art = infoState.value?.art
+                                    var rotation by remember { mutableStateOf(0f) }
+                                    
+                                    LaunchedEffect(infoState.value?.isPlaying) {
+                                        while (infoState.value?.isPlaying == true) {
+                                            rotation = (rotation + 2f) % 360f
+                                            kotlinx.coroutines.delay(50)
+                                        }
+                                    }
+                                    
+                                    // Album Art with Vinyl Effect
+                                    Box(
+                                        modifier = Modifier
+                                            .size(80.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF333333))
+                                    ) {
+                                        if (art != null) {
+                                            Image(
+                                                bitmap = art.asImageBitmap(),
+                                                contentDescription = null,
+                                                modifier = Modifier
+                                                    .matchParentSize()
+                                                    .rotate(rotation)
+                                            )
+                                            // Vinyl center hole
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.Center)
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black)
+                                            )
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = infoState.value?.title ?: "Parça yok",
+                                            color = Color.White,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = infoState.value?.artist ?: "Sanatçı yok",
+                                            color = Color.Gray,
+                                            fontSize = 14.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = if (infoState.value?.isPlaying == true) "▶ Çalıyor" else "⏸ Duraklatıldı",
+                                            color = if (infoState.value?.isPlaying == true) Color(0xFF00FF00) else Color.Gray,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                                
+                                // Progress bar
+                                val pos = infoState.value?.positionMs
+                                val dur = infoState.value?.durationMs
+                                if (pos != null && dur != null && dur > 0) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    val progress = (pos.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
+                                    LinearProgressIndicator(
+                                        progress = progress,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = Color.White,
+                                        trackColor = Color(0xFF333333)
+                                    )
+                                    Row(modifier = Modifier.fillMaxWidth()) {
+                                        Text(formatMs(pos), color = Color.Gray, fontSize = 12.sp)
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Text(formatMs(dur), color = Color.Gray, fontSize = 12.sp)
+                                    }
+                                }
+                                
+                                // Matrix Preview
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "MATRIX ÖNİZLEME",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                val previewState = remember { mutableStateOf(com.efedonmez.nothingmatrixmusicdisc.toy.GlyphPreviewStore.get()) }
+                                LaunchedEffect(Unit) {
+                                    while (true) {
+                                        previewState.value = com.efedonmez.nothingmatrixmusicdisc.toy.GlyphPreviewStore.get()
+                                        kotlinx.coroutines.delay(200)
+                                    }
+                                }
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(120.dp)
+                                        .background(Color.Black, CircleShape)
+                                        .align(Alignment.CenterHorizontally)
+                                ) {
+                                    val pf = previewState.value
+                                    if (pf != null) {
+                                        androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+                                            val width = pf.width
+                                            val height = pf.height
+                                            val pixels = pf.pixels
+                                            if (width > 0 && height > 0 && pixels.isNotEmpty()) {
+                                                val cellW = size.width / width
+                                                val cellH = size.height / height
+                                                val rows = min(height, pixels.size / width)
+                                                for (y in 0 until rows) {
+                                                    for (x in 0 until width) {
+                                                        val idx = y * width + x
+                                                        if (idx >= pixels.size) continue
+                                                        val v = pixels[idx].coerceIn(0, 255)
+                                                        if (v > 0) {
+                                                            drawRect(
+                                                                color = Color.White.copy(alpha = v / 255f),
+                                                                topLeft = androidx.compose.ui.geometry.Offset(x * cellW, y * cellH),
+                                                                size = androidx.compose.ui.geometry.Size(cellW, cellH)
+                                                            )
+                                                        }
+                                                    }
+                                                }
                     }
                 }
             }
         }
+    }
+}
+
+                        // Settings Section
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color(0xFF1A1A1A)
+                            ),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text(
+                                    text = "AYARLAR",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                // Display Mode Toggle
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            // GÖRSEL moduna geç: önce her şeyi temizle, sonra yeniden başlat
+                                            switchToVisualMode()
+                                            glyphShowArt.value = true
+                                            glyphShowTitle.value = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = if (glyphShowArt.value) Color.White else Color(0xFF333333)
+                                        )
+                                    ) {
+                                        Text(
+                                            "GÖRSEL",
+                                            color = if (glyphShowArt.value) Color.Black else Color.Gray,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    
+                                    FilledTonalButton(
+                                        onClick = {
+                                            // METİN moduna geç: önce her şeyi temizle, sonra yeniden başlat
+                                            switchToTextMode()
+                                            glyphShowTitle.value = true
+                                            glyphShowArt.value = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = if (glyphShowTitle.value) Color.White else Color(0xFF333333)
+                                        )
+                                    ) {
+    Text(
+                                            "METİN",
+                                            color = if (glyphShowTitle.value) Color.Black else Color.Gray,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                                
+                                // Brightness & Contrast - Only show when GÖRSEL is selected
+                                if (glyphShowArt.value) {
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                    
+                                    val brightState = remember { mutableStateOf(AppSettings.getMatrixBrightness(this@MainActivity)) }
+                                    val contrastState = remember { mutableStateOf(AppSettings.getMatrixContrast(this@MainActivity)) }
+                                    
+                                    Text("Parlaklık: ${brightState.value}", color = Color.Gray, fontSize = 14.sp)
+                                    Slider(
+                                        value = brightState.value / 255f,
+                                        onValueChange = {
+                                            val v = (it * 255).toInt().coerceIn(0, 255)
+                                            brightState.value = v
+                                            AppSettings.setMatrixBrightness(this@MainActivity, v)
+                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity)
+                                        },
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = Color.White,
+                                            activeTrackColor = Color.White,
+                                            inactiveTrackColor = Color(0xFF333333)
+                                        )
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    Text("Kontrast: ${contrastState.value}", color = Color.Gray, fontSize = 14.sp)
+                                    Slider(
+                                        value = contrastState.value / 200f,
+                                        onValueChange = {
+                                            val v = (it * 200).toInt().coerceIn(0, 200)
+                                            contrastState.value = v
+                                            AppSettings.setMatrixContrast(this@MainActivity, v)
+                                            com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixImageRenderer.renderNowPlayingArt(this@MainActivity)
+                                        },
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = Color.White,
+                                            activeTrackColor = Color.White,
+                                            inactiveTrackColor = Color(0xFF333333)
+                                        )
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(20.dp))
+                                
+                                // Otomatik kapanma süresi ayarı
+                                Text("Otomatik Kapanma: 10 saniye", color = Color.Gray, fontSize = 14.sp)
+                                Text(
+                                    text = "Müzik değiştiğinde Matrix 10 saniye gösterilir, sonra otomatik kapanır",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * GÖRSEL moduna geçiş yapar
+     * 
+     * Bu fonksiyon şunları yapar:
+     * 1. Mevcut servisi tamamen durdurur
+     * 2. Matrix ekranını temizler
+     * 3. Ayarları GÖRSEL moduna çevirir
+     * 4. Servisi GÖRSEL modunda yeniden başlatır
+     */
+    private fun switchToVisualMode() {
+        // 1. ADIM: Mevcut servisi tamamen durdur
+        stopAllMatrixServices()
+        
+        // 2. ADIM: Ayarları kaydet (GÖRSEL = açık, METİN = kapalı)
+        AppSettings.setGlyphShowArt(this, true)
+        AppSettings.setGlyphShowTitle(this, false)
+        
+        // 3. ADIM: 500ms bekle (servisin tamamen kapanması için)
+        Handler(Looper.getMainLooper()).postDelayed({
+            // 4. ADIM: Servisi GÖRSEL modunda yeniden başlat
+            AppSettings.setServiceDisabled(this, false)
+            startService(Intent(this, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_SHOW_DISC))
+        }, 500)
+    }
+
+    /**
+     * METİN moduna geçiş yapar
+     * 
+     * Bu fonksiyon şunları yapar:
+     * 1. Mevcut servisi tamamen durdurur
+     * 2. Matrix ekranını temizler
+     * 3. Ayarları METİN moduna çevirir
+     * 4. Servisi METİN modunda yeniden başlatır
+     */
+    private fun switchToTextMode() {
+        // 1. ADIM: Mevcut servisi tamamen durdur
+        stopAllMatrixServices()
+        
+        // 2. ADIM: Ayarları kaydet (METİN = açık, GÖRSEL = kapalı)
+        AppSettings.setGlyphShowTitle(this, true)
+        AppSettings.setGlyphShowArt(this, false)
+        
+        // 3. ADIM: 500ms bekle (servisin tamamen kapanması için)
+        Handler(Looper.getMainLooper()).postDelayed({
+            // 4. ADIM: Servisi METİN modunda yeniden başlat
+            AppSettings.setServiceDisabled(this, false)
+            startService(Intent(this, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_START))
+        }, 500)
+    }
+
+    /**
+     * Tüm Matrix servislerini tamamen durdurur ve temizler
+     * 
+     * Bu fonksiyon şunları yapar:
+     * 1. Glyph Toy servisini durdurur
+     * 2. App Matrix ekranını temizler
+     * 3. Tüm ayarları "kapalı" yapar
+     * 4. Matrix'in tamamen kapanmasını sağlar
+     */
+    private fun stopAllMatrixServices() {
+        // Glyph Toy servisini durdur
+        startService(Intent(this, GlyphToyService::class.java).setAction(GlyphToyService.ACTION_STOP))
+        
+        // App Matrix'i temizle ve kapat
+        com.efedonmez.nothingmatrixmusicdisc.appmatrix.AppMatrixControl.close(this)
+        
+        // Durum ayarlarını kapat olarak işaretle
+        AppSettings.setMatrixRunning(this, false)
+        AppSettings.setServiceDisabled(this, true)
     }
 }
 
@@ -164,18 +504,3 @@ private fun formatMs(ms: Long): String {
     return "%d:%02d".format(minutes, seconds)
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    NothingMatrixMusicDiscTheme {
-        Greeting("Android")
-    }
-}
